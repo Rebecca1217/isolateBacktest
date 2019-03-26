@@ -54,7 +54,7 @@ for iDate = 1 : length(fileNames90)
     if iDate == 1
         targetListTotalSP90 = targetList90;
     else
-        targetListTotalSP90 = vertcat(targetListTotalSP90, targetList60);
+        targetListTotalSP90 = vertcat(targetListTotalSP90, targetList90);
     end
 end
 
@@ -126,25 +126,29 @@ totalTargetList = array2table([totalTargetList.date, ...
 
 shiftTotalTList = totalTargetList(1:end-1, :);
 % 第一行全部都是'开'， 从第二行开始对比
+
+% @2019.03.26 之前有个细节错了，不是跟上一行的符号去对比，而是应该跟上一行未平仓所有手数去对比（需要求和）
+remainList = array2table([shiftTotalTList.date, cumsum(table2array(shiftTotalTList(:, 2:end)), 1)], ...
+    'VariableNames', totalTargetList.Properties.VariableNames);
 % 只“开”：
-openLabel = sign(table2array(totalTargetList(2:end, 2:end))) == sign(table2array(shiftTotalTList(:, 2:end))) | ...
-    (table2array(shiftTotalTList(:, 2:end)) == 0 & table2array(totalTargetList(2:end, 2:end)) ~= 0);
+openLabel = sign(table2array(totalTargetList(2:end, 2:end))) == sign(table2array(remainList(:, 2:end))) | ...
+    (table2array(remainList(:, 2:end)) == 0 & table2array(totalTargetList(2:end, 2:end)) ~= 0);
 % 只“平”：
-evenLabel = sign(table2array(totalTargetList(2:end, 2:end))) ~= sign(table2array(shiftTotalTList(:, 2:end))) & ...
-    abs(table2array(totalTargetList(2:end, 2:end))) <= abs(table2array(shiftTotalTList(:, 2:end)));
+evenLabel = sign(table2array(totalTargetList(2:end, 2:end))) ~= sign(table2array(remainList(:, 2:end))) & ...
+    abs(table2array(totalTargetList(2:end, 2:end))) <= abs(table2array(remainList(:, 2:end)));
 % 先平后开：
-multiLabel = sign(table2array(totalTargetList(2:end, 2:end))) ~= sign(table2array(shiftTotalTList(:, 2:end))) & ...
-    abs(table2array(totalTargetList(2:end, 2:end))) > abs(table2array(shiftTotalTList(:, 2:end))) & ...
-    sign(table2array(shiftTotalTList(:, 2:end))) ~= 0;
+multiLabel = sign(table2array(totalTargetList(2:end, 2:end))) ~= sign(table2array(remainList(:, 2:end))) & ...
+    abs(table2array(totalTargetList(2:end, 2:end))) > abs(table2array(remainList(:, 2:end))) & ...
+    sign(table2array(remainList(:, 2:end))) ~= 0;
 % 开，包含只开和先平后开中开的部分
 openHands1 = [totalTargetList.date(2:end), openLabel .* table2array(totalTargetList(2:end, 2:end))];
 openHands2 = [totalTargetList.date(2:end), multiLabel .* ...
-    (table2array(totalTargetList(2:end, 2:end)) + table2array(shiftTotalTList(:, 2:end)))];
+    (table2array(totalTargetList(2:end, 2:end)) + table2array(remainList(:, 2:end)))];
 openHands = vertcat(openHands1, openHands2);
 % 平，包含只平和先平后开中平的部分
 evenHands1 = [totalTargetList.date(2:end), evenLabel .* table2array(totalTargetList(2:end, 2:end))];
 evenHands2 =[totalTargetList.date(2:end), - multiLabel .* ...
-    table2array(shiftTotalTList(:, 2:end))];
+    table2array(remainList(:, 2:end))];
 evenHands = vertcat(evenHands1, evenHands2);
 
 % 汇总
